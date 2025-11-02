@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RifqyPray – Jadwal Sholat & Doa</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.png" type="image/png">
+  <meta name="theme-color" content="#1a5f3e">
+  <style>
+    :root {
+      --primary: #1a5f3e;
+      --bg: #0f1a14;
+      --card: #1a2e22;
+      --text: #ffffff;
+      --border: rgba(26, 95, 62, 0.4);
+      --azan: #00ff88;
+    }
+    @media (prefers-color-scheme: light) {
+      :root { --bg: #f8f9fa; --card: #ffffff; --text: #212529; --border: rgba(26,95,62,0.6); }
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 24px; padding-top: 40px; }
+    h1 { font-size: 32px; color: var(--primary); margin-bottom: 8px; }
+    .location { font-size: 16px; opacity: 0.8; }
+    .prayer-times { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 20px 0; }
+    .prayer-card { background: var(--card); border-radius: 20px; padding: 20px; text-align: center; border: 1px solid var(--border); }
+    .prayer-name { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .prayer-time { font-size: 24px; font-weight: bold; color: var(--azan); }
+    .next-prayer { background: rgba(0,255,136,0.2); border-left: 4px solid var(--azan); }
+    .compass { width: 200px; height: 200px; margin: 30px auto; position: relative; }
+    .compass img { width: 100%; animation: rotate 30s linear infinite; }
+    @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .doa { background: rgba(26,95,62,0.15); padding: 20px; border-radius: 20px; margin: 20px 0; text-align: center; font-style: italic; }
+    .azan-btn { background: var(--azan); color: #000; border: none; padding: 16px; border-radius: 16px; font-size: 18px; font-weight: 600; width: 100%; margin: 16px 0; cursor: pointer; }
+    .azan-btn:hover { transform: translateY(-2px); }
+    footer { text-align: center; margin-top: 40px; font-size: 13px; opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>RifqyPray</h1>
+      <p class="location" id="location">Memuat lokasi...</p>
+    </div>
+
+    <div class="prayer-times" id="prayer-times">
+      <!-- Diisi JS -->
+    </div>
+
+    <div class="card">
+      <h3 style="text-align:center; margin-bottom:16px;">Kompas Kiblat</h3>
+      <div class="compass">
+        <img src="https://i.imgur.com/5f5f5f5.png" alt="Kompas"> <!-- Ganti dengan gambar kompas -->
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="text-align:center; margin-bottom:16px;">Doa Harian</h3>
+      <div class="doa" id="doa">Memuat doa...</div>
+      <button class="azan-btn" onclick="playAzan()">Putar Azan</button>
+    </div>
+
+    <footer>
+      © 2025 RifqyPray | 
+      <a href="https://wa.me/6287759652715" style="color:var(--primary);">Upgrade ke PRO</a>
+    </footer>
+  </div>
+
+  <audio id="azan" src="azan.mp3"></audio>
+
+  <script>
+    const prayers = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
+    const doaHarian = [
+      "Ya Allah, berikanlah aku kekuatan untuk menjalani hari ini dengan ikhlas.",
+      "Rabbana atina fid-dunya hasanah wa fil-akhirati hasanah.",
+      "Allahumma inni as'aluka al-jannah."
+    ];
+
+    let location = { lat: 0, lng: 0 };
+    let prayerTimes = {};
+
+    // INIT
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(pos => {
+        location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        document.getElementById('location').textContent = `Lat: ${location.lat.toFixed(2)}, Lng: ${location.lng.toFixed(2)}`;
+        getPrayerTimes();
+        setInterval(updateNextPrayer, 1000);
+      });
+    }
+
+    async function getPrayerTimes() {
+      const date = new Date().toISOString().split('T')[0];
+      const res = await fetch(`https://api.aladhan.com/v1/timings/${date}?latitude=${location.lat}&longitude=${location.lng}&method=20`);
+      const data = await res.json();
+      prayerTimes = data.data.timings;
+      displayPrayerTimes();
+      showRandomDoa();
+    }
+
+    function displayPrayerTimes() {
+      const container = document.getElementById('prayer-times');
+      container.innerHTML = '';
+      prayers.forEach(p => {
+        const time = prayerTimes[p] || '--:--';
+        const card = document.createElement('div');
+        card.className = 'prayer-card';
+        if (isNextPrayer(p)) card.classList.add('next-prayer');
+        card.innerHTML = `<div class="prayer-name">${p}</div><div class="prayer-time">${time}</div>`;
+        container.appendChild(card);
+      });
+    }
+
+    function isNextPrayer(prayer) {
+      const now = new Date();
+      const [h, m] = prayerTimes[prayer].split(':').map(Number);
+      const prayerTime = new Date();
+      prayerTime.setHours(h, m, 0, 0);
+      return prayerTime > now && prayerTime < new Date(now.getTime() + 3600000);
+    }
+
+    function updateNextPrayer() {
+      const cards = document.querySelectorAll('.prayer-card');
+      cards.forEach(c => c.classList.remove('next-prayer'));
+      prayers.forEach(p => {
+        if (isNextPrayer(p)) {
+          const card = Array.from(cards).find(c => c.querySelector('.prayer-name').textContent === p);
+          if (card) card.classList.add('next-prayer');
+        }
+      });
+    }
+
+    function showRandomDoa() {
+      const doa = doaHarian[Math.floor(Math.random() * doaHarian.length)];
+      document.getElementById('doa').textContent = doa;
+    }
+
+    function playAzan() {
+      const audio = document.getElementById('azan');
+      audio.play();
+    }
+
+    // Update setiap menit
+    setInterval(() => {
+      getPrayerTimes();
+    }, 60000);
+  </script>
+</body>
+</html>
